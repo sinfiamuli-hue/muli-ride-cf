@@ -29,7 +29,7 @@ async function rl(env, req, key, max) {
 }
 async function getSet(env) {
   const r = await env.DB.prepare('SELECT json FROM settings WHERE island=?').bind(ISL).first();
-  return { base: 50, night: 20, routes: [], phone: '', ...(r ? JSON.parse(r.json) : {}) };
+  return { base: 50, night: 20, routes: [], phone: '7900319', ...(r ? JSON.parse(r.json) : {}) };
 }
 function fare(set, p, d, time) {
   const r = (set.routes || []).find(r => (r.from == p && r.to == d) || (r.from == d && r.to == p));
