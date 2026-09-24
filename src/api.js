@@ -95,7 +95,9 @@ async function route(env, req, m, p, b) {
   if (p[1] == 'login' && m == 'POST') {
     if (!await rl(env, req, 'lg', 8)) return J({ error: 'slow down' }, 429);
     if (p[0] == 'admin') {
-      if (!env.ADMIN_PASSWORD || !same(await sha(s(b.password)), await sha(env.ADMIN_PASSWORD))) return J({ error: 'auth' }, 401);
+      if (!env.ADMIN_PASSWORD) return J({ error: 'ADMIN_PASSWORD is not set on the server' }, 500);
+      if (!env.TOKEN_SECRET) return J({ error: 'TOKEN_SECRET is not set on the server' }, 500);
+      if (!same(await sha(s(b.password)), await sha(String(env.ADMIN_PASSWORD).trim()))) return J({ error: 'auth' }, 401);
       return J({ token: await mk(env, 'admin', 'admin') });
     }
     if (p[0] == 'driver') {
