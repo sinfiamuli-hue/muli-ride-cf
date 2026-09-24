@@ -115,8 +115,8 @@ function driver(){const me=S.drv.find(d=>role=='driver'&&d.id==rid&&d.active!==f
  ${b.status=='CONFIRMED'?`<button class="btn" onclick="bset('${b.id}',{status:'PICKED_UP'})">START RIDE · MARK PICKED UP</button>`:''}
  ${b.status=='PICKED_UP'?`<button class="btn" onclick="bset('${b.id}',{status:'COMPLETED'})">COMPLETE RIDE</button>`:''}</div>`).join('')||'<p class="mut">No rides right now.</p>'}
  <button class="btn sec sm" onclick="logout()">Log out</button>`}
-async function dlogin(){try{const j=await api('POST','driver/login',{phone:$('#dp').value,pin:$('#dn').value});setTok(j.token);await load()}catch(e){alert('Wrong phone or PIN')}}
-async function alogin(){try{const j=await api('POST','admin/login',{password:$('#ap2').value});setTok(j.token);await load()}catch(e){alert('Wrong password')}}
+async function dlogin(){try{const j=await api('POST','driver/login',{phone:$('#dp').value,pin:$('#dn').value});setTok(j.token);await load()}catch(e){alert(e.message=='auth'?'Wrong phone or PIN':'Problem: '+e.message)}}
+async function alogin(){try{const j=await api('POST','admin/login',{password:$('#ap2').value});setTok(j.token);await load()}catch(e){alert(e.message=='auth'?'Wrong password':'Problem: '+e.message)}}
 const act=async(m,p,b)=>{try{await api(m,p,b);await load()}catch(e){alert('Action failed')}};
 const dset=(id,o)=>role=='driver'?act('PATCH','driver/me',o):act('PATCH','admin/drivers/'+id,o);
 const bset=(id,o)=>act('PATCH',(role=='driver'?'driver':'admin')+'/bookings/'+id,o);
