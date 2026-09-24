@@ -41,6 +41,9 @@ try{drvId=localStorage.getItem('mr_drv')}catch(e){}
 window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();ip=e;render()});
 const isIOS=/iphone|ipad/i.test(navigator.userAgent),standalone=matchMedia('(display-mode: standalone)').matches||navigator.standalone===true;
 const inApp=/FBAN|FBAV|Instagram|WhatsApp|Viber|Messenger|Snapchat|TikTok|; wv\)/i.test(navigator.userAgent);
+let guide=false;
+function guideView(){const st=isIOS?[['Tap the Share button','the square with an arrow ⬆︎ next to the address bar (in Safari, it may be under the ⋯ menu)'],['Scroll down and tap','Add to Home Screen'],['Tap Add','top right corner'],['Open Muli Ride','from your home screen, like any app']]:[['Tap the ⋮ menu','top right of Chrome'],['Tap','Install app, or Add to Home screen'],['Tap Install','then open Muli Ride from your home screen']];
+ return `<button class="btn sec sm" onclick="guide=false;render()">← Back</button><h2>Install Muli Ride 📲</h2>${inApp?'<div class="warn">You are inside another app. Open this page in '+(isIOS?'Safari':'Chrome')+' first.</div>':''}${st.map((x,i)=>`<div class="card"><b>${i+1}. ${x[0]}</b><div class="mut">${x[1]}</div></div>`).join('')}<button class="btn" onclick="guide=false;render()">OK</button>`}
 function howto(){return inApp?'You are inside another app. Tap the ⋮ or ⋯ menu and choose Open in browser (Safari on iPhone, Chrome on Android), then install.':isIOS?'iPhone: open in Safari, tap the Share button, then Add to Home Screen.':'Android: open in Chrome, tap the ⋮ menu, then Install app or Add to Home screen.'}
 const locs=()=>S.loc.filter(l=>l.active!==false).map(l=>l.name).concat(S.loc.length?[]:DEF_LOC);
 function price(p,d,t){const r=(S.set.routes||[]).find(r=>(r.from==p&&r.to==d)||(r.from==d&&r.to==p));let f=r?+r.fare:+S.set.base;const h=t?+t.split(':')[0]:new Date().getHours();if(h>=22||h<5)f+= +S.set.night||0;return f}
@@ -66,15 +69,16 @@ function render(){const h=location.hash||'#/';const v=h=='#/admin'?admin():h=='#
  $('#app').innerHTML=(!db?'<div class="warn">No connection. Please check your internet and try again.</div>':'')+v}
 window.onhashchange=()=>{W={step:0,when:'NOW'};render()};
 function home(){
+ if(guide)return guideView();
  if(W.step)return wizard();
  return `<h1>Muli Ride 🚕</h1><p class="tag">Your island. Your ride.</p>
- ${!standalone?`<div class="card"><b>🚕 Get Muli Ride on your phone</b><div class="mut">Install Muli Ride for faster taxi booking.</div>${ip?'<button class="btn sm" onclick="inst()">INSTALL</button>':`<div class="mut">${howto()}</div>`}</div>`:''}
+ ${!standalone?`<div class="card"><b>🚕 Get Muli Ride on your phone</b><div class="mut">Install Muli Ride for faster taxi booking.</div><button class="btn sm" onclick="inst()">INSTALL</button></div>`:''}
  <button class="btn" onclick="W.step=1;render()">BOOK A RIDE</button>
  <button class="btn sec" onclick="location.hash='#/track'">My Booking</button>
  <a class="btn sec" style="text-decoration:none;text-align:center" href="tel:${esc(S.set.phone)}">Contact Us${S.set.phone?' · '+esc(S.set.phone):''}</a>
- ${!standalone&&ip?'<button class="btn sec" onclick="inst()">📲 Install Muli Ride</button>':''}
+ ${!standalone?'<button class="btn sec" onclick="inst()">📲 Install Muli Ride</button>':''}
  <p class="mut" style="text-align:center"><a href="#/driver">Driver</a> · <a href="#/admin">Admin</a></p>`}
-async function inst(){if(!ip)return;ip.prompt();await ip.userChoice;ip=null;render()}
+async function inst(){if(!ip){guide=true;render();return}ip.prompt();await ip.userChoice;ip=null;render()}
 function opts(list,key,extra=''){return `<div class="grid">${list.map(x=>`<div class="opt ${W[key]==x?'on':''}" onclick="W['${key}']='${esc(x)}';${extra}render()">${esc(x)}</div>`).join('')}</div>`}
 function wizard(){const s=W.step,L=locs().concat('Other');let b='';
  if(s==1)b=`<h2>Where should we pick you up?</h2>${opts(L,'pickup','if(W.pickup!=\'Other\')W.pmanual=\'\';')}${W.pickup=='Other'?'<input placeholder="Enter location manually" value="'+esc(W.pmanual)+'" oninput="W.pmanual=this.value">':''}<button class="btn" onclick="nx(1)">NEXT</button>`;
