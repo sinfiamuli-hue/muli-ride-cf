@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f766e">
+<title>Muli Ride</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<style>
+:root{--bg:#f4faf9;--card:#fff;--ink:#12302d;--mut:#5b7572;--pri:#0f766e;--pt:#fff;--acc:#f59e0b;--bd:#cfe3e0;--bad:#b91c1c;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0b1f1d;--card:#12302d;--ink:#e8f5f3;--mut:#9dbdb9;--pri:#14b8a6;--pt:#04211e;--bd:#245350}}
+:root[data-theme="dark"]{--bg:#0b1f1d;--card:#12302d;--ink:#e8f5f3;--mut:#9dbdb9;--pri:#14b8a6;--pt:#04211e;--bd:#245350}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:18px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+main{max-width:520px;margin:0 auto;padding:16px}
+h1{font-size:30px;margin:8px 0 0}h2{font-size:24px;margin:8px 0 14px}h3{margin:16px 0 8px}
+.tag{color:var(--mut);margin:0 0 20px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:16px;padding:14px;margin:10px 0}
+button,select,input{font:inherit;color:inherit}
+.btn{display:block;width:100%;padding:18px;margin:10px 0;border:0;border-radius:16px;background:var(--pri);color:var(--pt);font-weight:700;font-size:20px;cursor:pointer}
+.btn.sec{background:var(--card);color:var(--ink);border:2px solid var(--bd)}
+.btn.bad{background:var(--bad);color:#fff}.btn.sm{display:inline-block;width:auto;padding:8px 14px;font-size:16px;margin:4px 4px 4px 0}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.opt{padding:18px 8px;border:2px solid var(--bd);border-radius:14px;background:var(--card);font-weight:600;text-align:center;cursor:pointer}
+.opt.on{border-color:var(--pri);background:var(--pri);color:var(--pt)}
+input,select{width:100%;padding:14px;border:2px solid var(--bd);border-radius:12px;background:var(--card);margin:6px 0}
+.pill{display:inline-block;padding:3px 10px;border-radius:99px;font-size:14px;font-weight:700;background:var(--acc);color:#3b2500}
+.row{display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-bottom:1px dashed var(--bd)}.row:last-child{border:0}
+.row b{text-align:right}.mut{color:var(--mut);font-size:15px}.warn{background:#fef3c7;color:#5b3b00;border-radius:12px;padding:10px;font-size:15px}
+.nav{display:flex;gap:8px;margin-bottom:8px}.nav a{flex:1;text-align:center;padding:8px;border-radius:10px;border:1px solid var(--bd);color:var(--ink);text-decoration:none;font-size:15px}.nav a.on{background:var(--pri);color:var(--pt)}
+.kpi{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.kpi div{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:10px;text-align:center;font-size:13px}.kpi b{display:block;font-size:24px}
+</style></head><body><main id="app"></main>
+<script>
+const $=s=>document.querySelector(s),esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const ISLAND='muli',DEF_LOC=['Home','Jetty','Ferry Terminal','School','Hospital','Guesthouse','Shop'];
+const STAT={NEW:'Finding a driver…',ASSIGNED:'Driver Assigned',CONFIRMED:'Driver Confirmed',PICKED_UP:'Ride Started',COMPLETED:'Completed',CANCELLED:'Cancelled'};
+const S={loc:[],drv:[],bk:[],set:{base:50,night:20,routes:[],phone:'',wa:''}};
+let db=null,user=null,W={step:0,when:'NOW'},myBk=null,drvId=null,flt='ALL',q='',ip=null,busy=false,seenN={};
+try{drvId=localStorage.getItem('mr_drv')}catch(e){}
+window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();ip=e;render()});
+const isIOS=/iphone|ipad/i.test(navigator.userAgent),standalone=matchMedia('(display-mode: standalone)').matches;
+const locs=()=>S.loc.filter(l=>l.active!==false).map(l=>l.name).concat(S.loc.length?[]:DEF_LOC);
+function price(p,d,t){const r=(S.set.routes||[]).find(r=>(r.from==p&&r.to==d)||(r.from==d&&r.to==p));let f=r?+r.fare:+S.set.base;const h=t?+t.split(':')[0]:new Date().getHours();if(h>=22||h<5)f+= +S.set.night||0;return f}
+function notify(t){try{if('Notification'in window&&Notification.permission==='granted')new Notification('Muli Ride',{body:t})}catch(e){}}
+let tok=null,role=null,rid=null,myPh=null;
+try{const t=localStorage.getItem('mr_tok');if(t&&+t.split('.')[2]>Date.now())setTok(t)}catch(e){}
+function setTok(t){tok=t;role=t?t.split('.')[0]:null;rid=t?t.split('.')[1]:null;try{t?localStorage.setItem('mr_tok',t):localStorage.removeItem('mr_tok')}catch(e){}}
+function logout(){setTok(null);render()}
+async function api(m,p,b){const r=await fetch('/api/'+p,{method:m,headers:{'content-type':'application/json',...(tok?{authorization:'Bearer '+tok}:{})},body:b?JSON.stringify(b):undefined});
+ if(r.status==401&&tok)setTok(null);const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||'error');return j}
+async function load(){
+ try{const j=await api('GET','state');db=true;S.loc=j.loc;S.set=j.set;S.drv=j.drv;
+  if(role)S.bk=j.bk;else if(myBk&&myPh){try{S.bk=[await api('POST','lookup',{id:myBk,phone:myPh})]}catch(e){}}
+  S.bk.forEach(b=>{const k=seenN[b.id];
+   if(k&&k!=b.status&&role!='admin'&&b.id==myBk)notify({ASSIGNED:'Your Muli Ride driver has been assigned.',PICKED_UP:'Your ride has started.',COMPLETED:'Your Muli Ride is complete. Thank you!'}[b.status]||STAT[b.status]);
+   if(!k&&role=='admin'&&b.status=='NEW'&&Object.keys(seenN).length)notify('New Muli Ride booking');
+   seenN[b.id]=b.status})
+ }catch(e){db=false}
+ const a=document.activeElement;if(!a||!/INPUT|SELECT|TEXTAREA/.test(a.tagName))render()}
+async function init(){await load();setInterval(()=>{if(!document.hidden)load()},8000)}
+const isAdmin=()=>role=='admin';
+function render(){const h=location.hash||'#/';const v=h=='#/admin'?admin():h=='#/driver'?driver():h=='#/track'?track():home();
+ $('#app').innerHTML=(!db?'<div class="warn">No connection. Please check your internet and try again.</div>':'')+v}
+window.onhashchange=()=>{W={step:0,when:'NOW'};render()};
+function home(){
+ if(W.step)return wizard();
+ return `<h1>Muli Ride 🚕</h1><p class="tag">Your island. Your ride.</p>
+ ${!standalone?`<div class="card"><b>🚕 Get Muli Ride on your phone</b><div class="mut">Install Muli Ride for faster taxi booking.</div>${ip?'<button class="btn sm" onclick="inst()">INSTALL</button>':`<div class="mut">${isIOS?'iPhone: Share → Add to Home Screen':'Android: Browser Menu → Install App / Add to Home Screen'}</div>`}</div>`:''}
+ <button class="btn" onclick="W.step=1;render()">BOOK A RIDE</button>
+ <button class="btn sec" onclick="location.hash='#/track'">My Booking</button>
+ <a class="btn sec" style="text-decoration:none;text-align:center" href="tel:${esc(S.set.phone)}">Contact Us${S.set.phone?' · '+esc(S.set.phone):''}</a>
+ ${!standalone&&ip?'<button class="btn sec" onclick="inst()">📲 Install Muli Ride</button>':''}
+ <p class="mut" style="text-align:center"><a href="#/driver">Driver</a> · <a href="#/admin">Admin</a></p>`}
+async function inst(){if(!ip)return;ip.prompt();await ip.userChoice;ip=null;render()}
+function opts(list,key,extra=''){return `<div class="grid">${list.map(x=>`<div class="opt ${W[key]==x?'on':''}" onclick="W['${key}']='${esc(x)}';${extra}render()">${esc(x)}</div>`).join('')}</div>`}
+function wizard(){const s=W.step,L=locs().concat('Other');let b='';
+ if(s==1)b=`<h2>Where should we pick you up?</h2>${opts(L,'pickup','if(W.pickup!=\'Other\')W.pmanual=\'\';')}${W.pickup=='Other'?'<input placeholder="Enter location manually" value="'+esc(W.pmanual)+'" oninput="W.pmanual=this.value">':''}<button class="btn" onclick="nx(1)">NEXT</button>`;
+ if(s==2)b=`<h2>Where are you going?</h2>${opts(L,'dest')}${W.dest=='Other'?'<input placeholder="Enter destination manually" value="'+esc(W.dmanual)+'" oninput="W.dmanual=this.value">':''}<button class="btn" onclick="nx(2)">NEXT</button>`;
+ if(s==3)b=`<h2>How many passengers?</h2>${opts(['1','2','3','4','5+'],'pax')}<input placeholder="Your name" value="${esc(W.name)}" oninput="W.name=this.value"><input type="tel" inputmode="tel" placeholder="Phone number" value="${esc(W.phone)}" oninput="W.phone=this.value"><button class="btn" onclick="nx(3)">NEXT</button>`;
+ if(s==4)b=`<h2>When do you need the ride?</h2>${opts(['NOW','LATER'],'when')}${W.when=='LATER'?`<input type="date" value="${esc(W.date)}" onchange="W.date=this.value"><input type="time" value="${esc(W.time)}" onchange="W.time=this.value">`:''}<button class="btn" onclick="nx(4)">NEXT</button>`;
+ if(s==5){const p=pl(),d=dl();b=`<h2>Confirm your ride</h2><div class="card">${[['Pickup',p],['Destination',d],['Passengers',W.pax],['Time',W.when=='NOW'?'Now':W.date+' '+W.time],['Name',W.name],['Phone',W.phone],['Fare (cash)','MVR '+price(p,d,W.when=='LATER'?W.time:null)]].map(r=>`<div class="row"><span>${r[0]}</span><b>${esc(r[1])}</b></div>`).join('')}</div><button class="btn" ${busy?'disabled':''} onclick="submit()">CONFIRM BOOKING 🚕</button>`}
+ if(s==6)return conf();
+ return `<button class="btn sec sm" onclick="W.step=${s-1};render()">← Back</button>${b}`}
+const pl=()=>W.pickup=='Other'?W.pmanual:W.pickup,dl=()=>W.dest=='Other'?W.dmanual:W.dest;
+function nx(s){const e=n=>alert(n);
+ if(s==1&&!pl())return e('Please choose a pickup');if(s==2&&!dl())return e('Please choose a destination');
+ if(s==3){if(!W.pax)return e('Choose passengers');if(!(W.name||'').trim())return e('Enter your name');if(!/^[+\d\s-]{7,15}$/.test(W.phone||''))return e('Enter a valid phone number')}
+ if(s==4&&W.when=='LATER'&&(!W.date||!W.time))return e('Choose date and time');W.step=s+1;render()}
+async function submit(){if(busy)return;busy=true;render();
+ try{const b=await api('POST','bookings',{name:W.name,phone:W.phone,pickup:pl(),dest:dl(),pax:W.pax,when:W.when,date:W.date||'',time:W.time||''});
+  myBk=b.id;myPh=b.phone;S.bk=[b];seenN[b.id]=b.status;W.id=b.id;W.step=6;
+  if('Notification'in window&&Notification.permission=='default')Notification.requestPermission()}catch(e){alert('Could not send booking. Please try again.')}
+ busy=false;render()}
+function card(b){const st=STAT[b.status],d=b.driverName;return `<h2>${b.status=='NEW'?'Your ride request has been received! 🚕':b.status=='COMPLETED'?'Thank you! ✅':b.status=='CANCELLED'?'Booking cancelled':'🚕 Your Muli Ride is confirmed'}</h2>
+ <div class="card"><div class="row"><span>Booking</span><b>${esc(b.id)}</b></div><div class="row"><span>Status</span><b><span class="pill">${esc(st)}</span></b></div>
+ ${d&&b.status!='CANCELLED'?`<div class="row"><span>Driver</span><b>${esc(d)}</b></div><div class="row"><span>Taxi</span><b>#${esc(b.taxi)}</b></div>`:''}
+ <div class="row"><span>Pickup</span><b>${esc(b.pickup)}</b></div><div class="row"><span>Destination</span><b>${esc(b.dest)}</b></div><div class="row"><span>Fare (cash)</span><b>MVR ${esc(b.price)}</b></div></div>
+ ${d&&['ASSIGNED','CONFIRMED','PICKED_UP'].includes(b.status)?`<a class="btn" style="text-decoration:none;text-align:center" href="tel:${esc(b.driverPhone)}">📞 CALL DRIVER</a>`:''}
+ <button class="btn sec" onclick="render()">Refresh status</button>`}
+function conf(){const b=S.bk.find(x=>x.id==W.id);return b?card(b)+'<button class="btn sec" onclick="W={step:0,when:\'NOW\'};render()">Home</button>':'<p>Sending…</p>'}
+function track(){const b=S.bk.find(x=>x.id==myBk);
+ if(b)return `<button class="btn sec sm" onclick="location.hash='#/'">← Home</button>`+card(b);
+ return `<button class="btn sec sm" onclick="location.hash='#/'">← Home</button><h2>My Booking</h2><input id="tb" placeholder="Booking number (MUL-1048)"><input id="tp" type="tel" placeholder="Phone number"><button class="btn" onclick="find()">FIND MY BOOKING</button>`}
+async function find(){try{const b=await api('POST','lookup',{id:$('#tb').value.trim().toUpperCase(),phone:$('#tp').value});myBk=b.id;myPh=b.phone;S.bk=[b];seenN[b.id]=b.status;render()}catch(e){alert('Booking not found. Check your number and phone.')}}
+/* DRIVER */
+function driver(){const me=S.drv.find(d=>role=='driver'&&d.id==rid&&d.active!==false);
+ if(!me)return `<h1>Muli Ride Driver</h1><input id="dp" type="tel" placeholder="Phone number"><input id="dn" type="password" inputmode="numeric" placeholder="PIN"><button class="btn" onclick="dlogin()">LOG IN</button><a href="#/">← Customer app</a>`;
+ const mine=S.bk.filter(b=>b.driverId==me.id&&['ASSIGNED','CONFIRMED','PICKED_UP'].includes(b.status));
+ return `<h1>Muli Ride Driver</h1><p>Status: <b>${me.online?'🟢 AVAILABLE':'⚪ OFFLINE'}</b> · Taxi #${esc(me.taxi)}</p>
+ <button class="btn ${me.online?'sec':''}" onclick="dset('${me.id}',{online:${!me.online}})">${me.online?'GO OFFLINE':'GO ONLINE'}</button>
+ ${mine.map(b=>`<div class="card"><h3>${b.status=='ASSIGNED'?'NEW RIDE 🚕':esc(STAT[b.status])}</h3>
+ <div class="row"><span>Pickup</span><b>${esc(b.pickup)}</b></div><div class="row"><span>Destination</span><b>${esc(b.dest)}</b></div><div class="row"><span>Passengers</span><b>${esc(b.pax)}</b></div><div class="row"><span>Time</span><b>${b.when=='NOW'?'Now':esc(b.date+' '+b.time)}</b></div>
+ ${b.status=='ASSIGNED'?`<button class="btn" onclick="bset('${b.id}',{status:'CONFIRMED'})">ACCEPT</button><button class="btn bad" onclick="bset('${b.id}',{status:'NEW',driverId:'',driverName:'',driverPhone:'',taxi:''})">DECLINE</button>`:`<a class="btn sec" style="text-decoration:none;text-align:center" href="tel:${esc(b.phone)}">CALL CUSTOMER ${esc(b.name)}</a>`}
+ ${b.status=='CONFIRMED'?`<button class="btn" onclick="bset('${b.id}',{status:'PICKED_UP'})">START RIDE · MARK PICKED UP</button>`:''}
+ ${b.status=='PICKED_UP'?`<button class="btn" onclick="bset('${b.id}',{status:'COMPLETED'})">COMPLETE RIDE</button>`:''}</div>`).join('')||'<p class="mut">No rides right now.</p>'}
+ <button class="btn sec sm" onclick="logout()">Log out</button>`}
+async function dlogin(){try{const j=await api('POST','driver/login',{phone:$('#dp').value,pin:$('#dn').value});setTok(j.token);await load()}catch(e){alert('Wrong phone or PIN')}}
+async function alogin(){try{const j=await api('POST','admin/login',{password:$('#ap2').value});setTok(j.token);await load()}catch(e){alert('Wrong password')}}
+const act=async(m,p,b)=>{try{await api(m,p,b);await load()}catch(e){alert('Action failed')}};
+const dset=(id,o)=>role=='driver'?act('PATCH','driver/me',o):act('PATCH','admin/drivers/'+id,o);
+const bset=(id,o)=>act('PATCH',(role=='driver'?'driver':'admin')+'/bookings/'+id,o);
+/* ADMIN */
+function admin(){
+ if(!isAdmin())return `<h1>Admin</h1><input id="ap2" type="password" placeholder="Admin password"><button class="btn" onclick="alogin()">LOG IN</button><a href="#/">← Customer app</a>`;
+ const today=new Date().setHours(0,0,0,0),T=S.bk.filter(b=>b.created>=today),n=s=>S.bk.filter(b=>s.includes(b.status)).length;
+ let l=S.bk.filter(b=>(flt=='ALL'||b.status==flt)&&(!q||(b.id+b.name+b.phone).toLowerCase().includes(q.toLowerCase())));
+ const avail=S.drv.filter(d=>d.active!==false&&d.online);
+ return `<h1>Admin · Muli</h1><p class="tag"><a href="#/">Customer app</a> · <a href="#/admin" onclick="logout()">Log out</a></p>
+ <div class="kpi"><div><b>${T.length}</b>Today</div><div><b>${n(['ASSIGNED','CONFIRMED','PICKED_UP'])}</b>Active</div><div><b>${n(['COMPLETED'])}</b>Done</div><div><b>${n(['CANCELLED'])}</b>Cancelled</div><div><b>${avail.length}</b>Available</div><div><b>${S.drv.length-avail.length}</b>Offline</div></div>
+ <h3>Bookings</h3><input placeholder="Search number, name, phone" value="${esc(q)}" onchange="q=this.value;render()"><select onchange="flt=this.value;render()">${['ALL',...Object.keys(STAT)].map(s=>`<option ${s==flt?'selected':''}>${s}</option>`).join('')}</select>
+ ${l.map(b=>`<div class="card"><b>${esc(b.id)}</b> <span class="pill">${esc(b.status)}</span><div class="mut">${esc(b.name)} · ${esc(b.phone)}<br>${esc(b.pickup)} → ${esc(b.dest)} · ${esc(b.pax)} pax · MVR ${esc(b.price)}<br>${b.when=='NOW'?'Now':esc(b.date+' '+b.time)} · booked ${new Date(b.created).toLocaleString()}${b.driverName?'<br>Driver: '+esc(b.driverName):''}</div>
+ ${['NEW','ASSIGNED'].includes(b.status)?`<select onchange="assign('${b.id}',this.value)"><option value="">Assign driver…</option>${S.drv.filter(d=>d.active!==false).map(d=>`<option value="${d.id}">${esc(d.name)} #${esc(d.taxi)}${d.online?' 🟢':''}</option>`).join('')}</select>`:''}
+ ${!['COMPLETED','CANCELLED'].includes(b.status)?`<button class="btn bad sm" onclick="bset('${b.id}',{status:'CANCELLED'})">Cancel</button><button class="btn sec sm" onclick="edit('${b.id}')">Edit</button>`:''}</div>`).join('')||'<p class="mut">No bookings.</p>'}
+ <h3>Drivers</h3>${S.drv.map(d=>`<div class="card"><b>${esc(d.name)}</b> #${esc(d.taxi)} · ${esc(d.phone)} ${d.online?'🟢':'⚪'}<div class="mut">Completed: ${S.bk.filter(b=>b.driverId==d.id&&b.status=='COMPLETED').length}</div><button class="btn sec sm" onclick="dset('${d.id}',{active:${d.active===false}})">${d.active===false?'Activate':'Deactivate'}</button><button class="btn bad sm" onclick="if(confirm('Remove driver?'))act('DELETE','admin/drivers/${d.id}')">Remove</button></div>`).join('')}
+ <div class="card"><input id="an" placeholder="Driver name"><input id="ap" type="tel" placeholder="Phone"><input id="at" placeholder="Taxi number (e.g. 03)"><input id="ax" placeholder="Login PIN"><button class="btn sm" onclick="addDrv()">Add driver</button></div>
+ <h3>Locations</h3><div class="card">${S.loc.map(x=>`<div class="row"><span>${esc(x.name)}${x.active===false?' (off)':''}</span><span><button class="btn sec sm" onclick="act('PATCH','admin/locations/${x.id}',{active:${x.active===false}})">${x.active===false?'On':'Off'}</button><button class="btn sec sm" onclick="act('DELETE','admin/locations/${x.id}')">✕</button></span></div>`).join('')||'<button class="btn sec" onclick="seed()">Load default Muli locations</button>'}<input id="ln" placeholder="New location name"><button class="btn sm" onclick="addLoc()">Add</button></div>
+ <h3>Pricing (MVR)</h3><div class="card"><label>Base fare</label><input id="pb" type="number" value="${esc(S.set.base)}"><label>Night surcharge (22:00–05:00)</label><input id="pn" type="number" value="${esc(S.set.night)}"><label>Contact phone</label><input id="pc" value="${esc(S.set.phone)}">
+ ${(S.set.routes||[]).map((r,i)=>`<div class="row"><span>${esc(r.from)} ↔ ${esc(r.to)}</span><b>${esc(r.fare)} <a href="#/admin" onclick="delRoute(${i})">✕</a></b></div>`).join('')}
+ <select id="rf">${locs().map(x=>`<option>${esc(x)}</option>`).join('')}</select><select id="rt">${locs().map(x=>`<option>${esc(x)}</option>`).join('')}</select><input id="rp" type="number" placeholder="Fare for this route"><button class="btn sm" onclick="addRoute()">Add route fare</button><button class="btn" onclick="saveSet()">Save pricing</button></div>`}
+function assign(id,did){if(did)bset(id,{status:'ASSIGNED',driverId:did})}
+function edit(id){const b=S.bk.find(x=>x.id==id),p=prompt('Pickup',b.pickup);if(p===null)return;const d=prompt('Destination',b.dest);if(d===null)return;const pr=prompt('Price (MVR)',b.price);bset(id,{pickup:p,dest:d,price:+pr||b.price})}
+function addDrv(){const v=i=>$(i).value.trim();if(!v('#an')||!/^[+\d\s-]{7,15}$/.test(v('#ap'))||v('#ax').length<4)return alert('Fill name, phone and a PIN (4+ characters)');act('POST','admin/drivers',{name:v('#an'),phone:v('#ap'),taxi:v('#at'),pin:v('#ax')})}
+function addLoc(){const n=$('#ln').value.trim();if(n)act('POST','admin/locations',{name:n})}
+function seed(){act('POST','admin/locations/seed')}
+const setDoc=o=>act('PUT','admin/settings',{...S.set,...o});
+function saveSet(){setDoc({base:+$('#pb').value||0,night:+$('#pn').value||0,phone:$('#pc').value.trim()});alert('Saved')}
+function addRoute(){const f=+$('#rp').value;if(!f)return;setDoc({routes:[...(S.set.routes||[]),{from:$('#rf').value,to:$('#rt').value,fare:f}]})}
+function delRoute(i){const r=[...(S.set.routes||[])];r.splice(i,1);setDoc({routes:r})}
+if('serviceWorker'in navigator)navigator.serviceWorker.register('/sw.js').catch(()=>{});
+render();init();
+</script></body></html>
